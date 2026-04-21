@@ -103,7 +103,7 @@ Estructurar la base de datos siguiendo un **modelo dimensional (estrella/copo de
 
 ## 🔗 Acceso al proyecto
 
-👉 [Ver código SQL completo en Google Drive]([REEMPLAZAR_CON_TU_LINK_DE_DRIVE](https://drive.google.com/file/d/1sEeALqKlUdaNM1xZvX8mB7Ah5YfaYlPo/view?usp=sharing))
+👉 [Ver código SQL completo en Google Drive](https://drive.google.com/file/d/1sEeALqKlUdaNM1xZvX8mB7Ah5YfaYlPo/view?usp=sharing)
 
 ---
 
