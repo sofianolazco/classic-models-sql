@@ -15,29 +15,24 @@
 | Categorías traducidas al español | ✅ 100% |
 | Separación de nombres compuestos | ✅ 2 campos independientes |
 | Consolidación de direcciones | ✅ De 2 columnas a 1 con manejo de nulos |
+| Integridad referencial | ✅ 4 Foreign Keys implementadas con ON DELETE / ON UPDATE |
 | Estado final | ✅ Base lista para análisis de ventas, clientes e inventario |
 
 ---
 
 ## 🏢 Contexto del negocio
 
-Classic Models es una empresa que comercializa réplicas en miniatura de distintos vehículos. El proyecto trabaja con su base de datos operacional, preparando la información para garantizar correcta estructura, consistencia y disponibilidad para análisis.
+Classic Models es una empresa que comercializa réplicas en miniatura de distintos vehículos. El proyecto trabaja con su base de datos operacional (`raw_classicmodels`), transformándola en un modelo dimensional limpio, estructurado y listo para análisis.
 
 ---
 
 ## 🎯 Objetivo
 
-Estructurar la base de datos siguiendo un **modelo dimensional (estrella/copo de nieve)**, definiendo:
-
-- 3 tablas dimensionales: `dim_productos`, `dim_clientes`, `dim_detalle_pedidos`
-- 2 tablas de hechos: `fac_pagos`, `fac_pedidos`
-- Relaciones mediante claves primarias y foráneas
-- Tipos de datos optimizados (`VARCHAR`, `INT`, `DECIMAL`, `DATE`, `DATETIME`, `TEXT`)
-- Nomenclatura en español para facilitar el análisis del negocio
+Construir un **modelo dimensional tipo estrella** desde cero sobre los datos crudos, definiendo tablas dimensionales y de hechos con relaciones, tipos de datos optimizados y nomenclatura en español.
 
 ---
 
-## 📁 Estructura del dataset
+## 📁 Estructura del modelo
 
 | Tabla original | Tabla resultante | Tipo | Descripción |
 |---|---|---|---|
@@ -48,53 +43,75 @@ Estructurar la base de datos siguiendo un **modelo dimensional (estrella/copo de
 | `orders` | `fac_pedidos` | Hecho | Pedidos realizados por clientes |
 
 ### Relaciones implementadas
-- `dim_clientes → fac_pagos` (1:N) — Un cliente puede realizar múltiples pagos
-- `dim_clientes → fac_pedidos` (1:N) — Un cliente puede realizar múltiples pedidos
-- `fac_pedidos → dim_detalle_pedidos` (1:N) — Un pedido contiene múltiples líneas de detalle
-- `dim_productos → dim_detalle_pedidos` (1:N) — Un producto puede aparecer en múltiples detalles
+
+- `dim_clientes → fac_pagos` — FK con `ON DELETE RESTRICT` / `ON UPDATE CASCADE`
+- `dim_clientes → fac_pedidos` — FK con `ON DELETE RESTRICT` / `ON UPDATE CASCADE`
+- `fac_pedidos → dim_detalle_pedidos` — FK con `ON DELETE CASCADE` / `ON UPDATE CASCADE`
+- `dim_productos → dim_detalle_pedidos` — FK con `ON DELETE RESTRICT` / `ON UPDATE CASCADE`
 
 ---
 
 ## 🔧 Transformaciones principales
 
-### Estandarización de nomenclatura
-- Traducción de tablas y columnas al español
-- Renombramiento de líneas de producto (`Vintage Cars` → `Coches Vintage`)
-- Traducción de estados de pedidos (`Shipped` → `Enviado`)
+### dim_productos
+- Traducción de líneas de producto con `CASE` (`Classic Cars` → `Coches Clasicos`, etc.)
+- Tipos de datos optimizados: `VARCHAR`, `TEXT`, `INT`, `DECIMAL(15,2)`
+- `productCode` como `PRIMARY KEY`
 
-### Limpieza de datos
-- Conversión de fechas de string a formato `DATE`/`DATETIME` con `STR_TO_DATE()`
-- Separación de nombres y apellidos con `SUBSTR()` e `INSTR()`
-- Consolidación de direcciones con `CONCAT()` y manejo de nulos con `COALESCE()`
-- Eliminación de espacios con `RTRIM()`
+### dim_clientes
+- Separación de nombre y apellido del contacto con `SUBSTR()` + `INSTR()` sobre el campo `lastNameFirstName`
+- Consolidación de `addressLine1` y `addressLine2` con `CONCAT()` + `COALESCE()` para manejo de nulos
+- `customerNumber` como `PRIMARY KEY`
 
-### Modelado dimensional
-- Creación de tablas dimensionales y de hechos
-- Integridad referencial con constraints de claves primarias y foráneas
-- Clave primaria autoincremental para `dim_detalle_pedidos`
+### fac_pagos
+- Conversión de fechas de `VARCHAR` a `DATETIME` con `STR_TO_DATE(SUBSTR(paymentDate, 1, 17), "%Y%m%d %H:%i:%s")`
+- Manejo del caso especial con dos timestamps en un mismo campo
+- Clave primaria compuesta `(pk_pago, id_cliente)`
+- `id_cliente` obtenido mediante `LEFT JOIN` con `dim_clientes`
+
+### fac_pedidos
+- Conversión de tres columnas de fecha (`orderdate`, `requireddate`, `shippedDate`) con `STR_TO_DATE()`
+- Traducción de estados con `CASE` (`Shipped` → `Entregado`, `On Hold` → `En Espera`, etc.)
+- FK hacia `dim_clientes` con `ON DELETE RESTRICT` / `ON UPDATE CASCADE`
+
+### dim_detalle_pedidos
+- Clave primaria autoincremental `pk_id INT AUTO_INCREMENT` (la tabla original no tenía PK natural)
+- FKs hacia `fac_pedidos` y `dim_productos`
+- `INSERT INTO` especificando columnas por separado del campo autoincremental
 
 ---
 
 ## ⚙️ Tecnología utilizada
 
-**SGBD:** MySQL
+**SGBD:** MySQL Workbench
 
-**Técnicas aplicadas:**
-```
-├── Funciones de string (SUBSTR, INSTR, CONCAT, RTRIM, COALESCE)
-├── Funciones de fecha (STR_TO_DATE)
-├── Sentencias CASE para transformación de valores
-├── LEFT JOIN para relaciones entre tablas
-└── Constraints (PRIMARY KEY, AUTO_INCREMENT, FOREIGN KEY)
+**Funciones y técnicas aplicadas:**
+```sql
+-- Exploración
+DESCRIBE tabla;
+SELECT MAX(LENGTH(columna)) AS max_caracteres FROM tabla;
+SELECT COUNT(*), COUNT(DISTINCT columna) FROM tabla;
+
+-- Transformación
+CASE WHEN ... THEN ... ELSE ... END
+STR_TO_DATE(SUBSTR(campo, 1, 17), "%Y%m%d %H:%i:%s")
+SUBSTR(lastNameFirstName, INSTR(lastNameFirstName, ',')+1, 99)
+CONCAT(addressLine1, '', COALESCE(addressLine2, ''))
+
+-- Modelado
+PRIMARY KEY, AUTO_INCREMENT
+FOREIGN KEY ... REFERENCES ... ON DELETE ... ON UPDATE
+LEFT JOIN
+ENGINE=InnoDB
 ```
 
 ---
 
-## 📈 Análisis posibles con esta base de datos
+## 📈 Análisis posibles con esta base
 
-- Análisis de ventas por línea de producto
+- Ventas por línea de producto y período
 - Seguimiento de estados de pedidos y tiempos de entrega
-- Análisis de comportamiento de pago por cliente
+- Comportamiento de pagos por cliente
 - Gestión de inventario y stock
 - Análisis geográfico de clientes
 - Evaluación de límites de crédito
@@ -103,11 +120,11 @@ Estructurar la base de datos siguiendo un **modelo dimensional (estrella/copo de
 
 ## 🔗 Acceso al proyecto
 
-👉 [Ver código SQL completo en Google Drive](https://drive.google.com/file/d/1sEeALqKlUdaNM1xZvX8mB7Ah5YfaYlPo/view?usp=sharing)
+👉 [Ver código SQL completo](./proyecto_classic_models.sql)
 
 ---
 
 ## 👩‍💻 Autora
 
 **María Sofía Nolazco** — Ingeniera Civil | Analista de Datos  
-[LinkedIn](https://www.linkedin.com/in/mariasofia-nolazco-4a69a0134) · [Portfolio](https://sofianolazco.github.io/)
+[LinkedIn](https://www.linkedin.com/in/maria-sofia-nolazco-4a69a0134) · [Portfolio](https://sofianolazco.github.io/)
